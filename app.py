@@ -85,7 +85,7 @@ st.markdown("<h1 style='margin:0; color:#FF5F1F;'>📡 AGRO-SCAN NAVIGATOR</h1>"
 
 # 1. Intentamos obtener la ubicación con alta precisión
 loc = streamlit_js_eval(
-    js_expressions="navigator.geolocation.getCurrentPosition(pos => pos.coords, err => console.log(err), {enableHighAccuracy:true, timeout:5000, maximumAge:0})", 
+    js_expressions="navigator.geolocation.getCurrentPosition(pos => pos.coords, err => console.log(err), {enableHighAccuracy:true, timeout:5000, maximumAge:0})",
     key="gps_sensor"
 )
 
@@ -98,10 +98,9 @@ else:
     # Si loc es None, mostramos un aviso claro en lugar de usar el fallback silencioso
     st.warning("⚠️ SENSOR GPS INACTIVO")
     st.info("Por favor, asegúrate de dar permiso de ubicación en el navegador y tener el GPS encendido.")
-    
+
     # Valores de emergencia (puedes poner 0,0 para que sea obvio que no hay señal)
-    lat_val, lon_val = 20.6825, -103.3830  # Actualizado a GDL por ahora
-st.markdown('</div>', unsafe_allow_html=True)
+    lat_val, lon_val = 20.6825, -103.3830  # Actualizado a GDL por ahorast.markdown('</div>', unsafe_allow_html=True)
     # --- DISPLAY COORDENADAS ESTILO FOTO ---
     st.markdown(f"""
         <div style="background:#0A0A0A; padding:15px; border-radius:5px; border:1px solid #222;">
