@@ -1,0 +1,5 @@
+streamlit
+pandas
+scipy
+pyarrow
+streamlit-js-eval
