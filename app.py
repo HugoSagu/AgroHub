@@ -74,7 +74,7 @@ def main():
                 <text x="5" y="53" fill="#888" font-size="8">W</text>
                 <path d="M50 20 L55 50 L50 80 L45 50 Z" fill="#FF5F1F" opacity="0.8"/>
             </svg>
-            <h2 style='color:#FF5F1F; margin:10px 0 0 0;'>MISSION NAVIGATOR</h2>
+            <h2 style='color:#FF5F1F; margin:10px 0 0 0;'>VISOR AGRÍCOLA</h2>
         </div>
     """, unsafe_allow_html=True)
 
