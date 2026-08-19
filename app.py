@@ -12,12 +12,12 @@ def apply_navigator_style():
     st.markdown("""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
-        
+
         .main { background-color: #000000; color: #FFFFFF; font-family: 'Inter', sans-serif; }
-        
+
         /* Estilo de Botón de Escaneo */
-        .stButton>button { 
-            border: 1px solid #FF5F1F; background-color: #1A0F0A; color: #FF5F1F; 
+        .stButton>button {
+            border: 1px solid #FF5F1F; background-color: #1A0F0A; color: #FF5F1F;
             width: 100%; height: 60px; font-weight: bold; border-radius: 0px;
             letter-spacing: 2px; transition: 0.3s;
         }
@@ -29,16 +29,16 @@ def apply_navigator_style():
             background: radial-gradient(circle, #1a1a1a 0%, #000000 100%);
             margin-bottom: 20px; border-radius: 5px;
         }
-        
+
         .coordinate-label { color: #888; font-size: 1.1rem; text-align: left; }
         .coordinate-value { color: #FFFFFF; font-size: 1.2rem; font-family: monospace; text-align: right; }
-        
+
         /* Tarjetas de Datos */
         .data-card {
             border-left: 3px solid #FF5F1F; background-color: #0A0A0A;
             padding: 15px; margin: 10px 0;
         }
-        
+
         [data-testid="stMetricValue"] { color: #FF5F1F !important; font-family: monospace; }
         [data-testid="stMetricLabel"] { color: #AAA !important; text-transform: uppercase; }
         hr { border: 0.5px solid #333; }
@@ -52,7 +52,7 @@ def decimal_to_dms(deg, is_lat=True):
         direction = "N" if deg >= 0 else "S"
     else:
         direction = "E" if deg >= 0 else "W"
-    
+
     deg = abs(deg)
     d = int(deg)
     m = int((deg - d) * 60)
@@ -61,7 +61,7 @@ def decimal_to_dms(deg, is_lat=True):
 
 def main():
     apply_navigator_style()
-    
+
     # --- HEADER: SIMULACIÓN DE BRÚJULA ---
     st.markdown("""
         <div class="compass-header">
@@ -79,12 +79,29 @@ def main():
     """, unsafe_allow_html=True)
 
     # --- OBTENER POSICIÓN ---
-    loc = streamlit_js_eval(js_expressions="navigator.geolocation.getCurrentPosition(pos => pos.coords, err => console.log(err), {enableHighAccuracy:true})", key="gps")
-    
-    lat_val, lon_val = (20.174966, -102.222761) # Fallback (Jalisco/Michoacán)
-    if loc:
-        lat_val, lon_val = loc['latitude'], loc['longitude']
+    # --- BLOQUE GPS CORREGIDO Y REFORZADO ---
+st.markdown('<div class="header-box">', unsafe_allow_html=True)
+st.markdown("<h1 style='margin:0; color:#FF5F1F;'>📡 AGRO-SCAN NAVIGATOR</h1>", unsafe_allow_html=True)
 
+# 1. Intentamos obtener la ubicación con alta precisión
+loc = streamlit_js_eval(
+    js_expressions="navigator.geolocation.getCurrentPosition(pos => pos.coords, err => console.log(err), {enableHighAccuracy:true, timeout:5000, maximumAge:0})", 
+    key="gps_sensor"
+)
+
+# 2. Verificamos si el sensor respondió
+if loc:
+    lat_val = loc['latitude']
+    lon_val = loc['longitude']
+    st.success(f"✅ SENSOR CONECTADO: ±{loc['accuracy']:.1f}m")
+else:
+    # Si loc es None, mostramos un aviso claro en lugar de usar el fallback silencioso
+    st.warning("⚠️ SENSOR GPS INACTIVO")
+    st.info("Por favor, asegúrate de dar permiso de ubicación en el navegador y tener el GPS encendido.")
+    
+    # Valores de emergencia (puedes poner 0,0 para que sea obvio que no hay señal)
+    lat_val, lon_val = 20.6825, -103.3830  # Actualizado a GDL por ahora
+st.markdown('</div>', unsafe_allow_html=True)
     # --- DISPLAY COORDENADAS ESTILO FOTO ---
     st.markdown(f"""
         <div style="background:#0A0A0A; padding:15px; border-radius:5px; border:1px solid #222;">
@@ -120,7 +137,7 @@ def main():
         with st.spinner("SINCRO-MALLA..."):
             dist, idx = tree.query([lat_val, lon_val])
             data = df.iloc[idx]
-            
+
             # --- SECCIÓN SUELO ---
             st.subheader("🛠️ SUELO (EDACOLOGÍA)")
             c1, c2 = st.columns(2)
@@ -135,7 +152,7 @@ def main():
 
             # --- SECCIÓN CLIMA ---
             st.subheader(f"📊 CLIMA {datetime.now().strftime('%B').upper()}")
-            
+
             m_list = [
                 ("LLUVIA", "rain_25", "rain_26", "mm"),
                 ("ESTRÉS (VPD)", "vpd_25", "vpd_26", "kPa"),
@@ -145,7 +162,7 @@ def main():
 
             for label, c25, c26, unit in m_list:
                 v25, v26 = data[c25], data[c26]
-                st.metric(label=f"{label} (ACTUAL)", value=f"{v26:.2f} {unit}", 
+                st.metric(label=f"{label} (ACTUAL)", value=f"{v26:.2f} {unit}",
                           delta=f"{v26-v25:.2f} vs 2025")
 
     st.sidebar.markdown("### SYSTEM LOG")
