@@ -5,7 +5,7 @@ from scipy.spatial import KDTree
 from streamlit_js_eval import streamlit_js_eval
 from datetime import datetime
 
-# --- ESTÉTICA MISSION CONTROL (HUD) ---
+# --- CONFIGURACIÓN UI ---
 st.set_page_config(page_title="AGRO-SCAN PRO", layout="centered")
 
 def apply_hud_style():
@@ -15,18 +15,11 @@ def apply_hud_style():
         .main { background-color: #000000; color: #00FF41; font-family: 'JetBrains Mono', monospace; }
         .stButton>button { 
             border: 2px solid #00FF41; background-color: #051405; color: #00FF41; 
-            width: 100%; height: 70px; font-size: 1.2rem; font-weight: bold;
-            box-shadow: 0 0 15px #00FF41; border-radius: 4px;
+            width: 100%; height: 60px; font-weight: bold; border-radius: 4px; box-shadow: 0 0 10px #00FF41;
         }
-        .stMetric { background-color: #0A0A0A; border: 1px solid #1A331A; padding: 15px; border-radius: 5px; }
-        [data-testid="stMetricValue"] { color: #00FF41; font-size: 1.5rem !important; }
-        .header-box { border: 2px solid #333; padding: 15px; text-align: center; margin-bottom: 20px; background: #050505; }
-        .telemetry-box { 
-            background-color: #050505; border: 1px dashed #00FF41; 
-            padding: 10px; margin-top: 10px; font-size: 0.85rem; color: #00FF41;
-        }
-        .month-tag { color: #000; background-color: #00FF41; padding: 2px 10px; font-weight: bold; border-radius: 3px; }
-        h3 { color: #00FF41 !important; letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid #1A331A; }
+        .header-box { border: 2px solid #333; padding: 15px; text-align: center; background: #050505; margin-bottom: 10px;}
+        .telemetry-box { background: #0A0A0A; border: 1px solid #00FF41; padding: 10px; font-size: 0.8rem; color: #00FF41; border-radius: 4px;}
+        .month-tag { color: #000; background-color: #00FF41; padding: 2px 8px; font-weight: bold; border-radius: 3px; }
         </style>
     """, unsafe_allow_html=True)
 
@@ -36,103 +29,82 @@ def load_engine(file_path):
     tree = KDTree(df[['lat_suelo', 'lon_suelo']].values)
     return df, tree
 
-def get_month_name():
-    meses = {1:"ENERO", 2:"FEBRERO", 3:"MARZO", 4:"ABRIL", 5:"MAYO", 6:"JUNIO", 
-             7:"JULIO", 8:"AGOSTO", 9:"SEPTIEMBRE", 10:"OCTUBRE", 11:"NOVIEMBRE", 12:"DICIEMBRE"}
-    return meses[datetime.now().month]
-
 def main():
     apply_hud_style()
-    nombre_mes = get_month_name()
-    
-    # --- HEADER ---
+    nombre_mes = {1:"ENERO", 2:"FEBRERO", 3:"MARZO", 4:"ABRIL", 5:"MAYO", 6:"JUNIO", 
+                  7:"JULIO", 8:"AGOSTO", 9:"SEPTIEMBRE", 10:"OCTUBRE", 11:"NOVIEMBRE", 12:"DICIEMBRE"}[datetime.now().month]
+
     st.markdown('<div class="header-box">', unsafe_allow_html=True)
     st.markdown("<h1 style='margin:0; color:#00FF41;'>📡 AGRO-SCAN PRO</h1>", unsafe_allow_html=True)
-    st.markdown(f"PERIODO: <span class='month-tag'>{nombre_mes} {datetime.now().year}</span>", unsafe_allow_html=True)
-    
-    # Geolocalización del dispositivo
-    loc = streamlit_js_eval(js_expressions="window.navigator.geolocation.getCurrentPosition(pos => pos.coords)", key="location")
-    
-    if loc:
-        lat_gps, lon_gps = loc['latitude'], loc['longitude']
-        acc_gps = loc['accuracy']
-        st.success(f"SENSOR GPS: ONLINE")
-    else:
-        st.warning("🛰️ BUSCANDO SATÉLITES...")
-        lat_gps, lon_gps, acc_gps = 19.1684, -104.6623, 0.0
+    st.markdown(f"MODO: <span class='month-tag'>{nombre_mes} '25/'26</span>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    DATA_FILE = "field_app_data.parquet" 
-    
+    # --- LÓGICA DE GPS REFORZADA ---
+    st.sidebar.header("CONFIGURACIÓN GPS")
+    modo_gps = st.sidebar.radio("MODO DE UBICACIÓN", ["Automático (Sensor)", "Manual (Override)"])
+
+    lat_final, lon_final, acc_final = 0.0, 0.0, 0.0
+
+    if modo_gps == "Automático (Sensor)":
+        # Forzamos High Accuracy mediante JS
+        loc = streamlit_js_eval(
+            js_expressions="navigator.geolocation.getCurrentPosition(pos => pos.coords, err => console.log(err), {enableHighAccuracy:true, timeout:5000, maximumAge:0})", 
+            key="gps_engine"
+        )
+        if loc:
+            lat_final, lon_final, acc_final = loc['latitude'], loc['longitude'], loc['accuracy']
+            st.sidebar.success(f"✅ Satélite Lock: ±{acc_final:.1f}m")
+        else:
+            st.sidebar.warning("⌛ Obteniendo señal...")
+            # Fallback a un punto central si no hay señal
+            lat_final, lon_final = 19.1684, -104.6623
+    else:
+        # Modo manual para cuando el GPS falla
+        lat_final = st.sidebar.number_input("Latitud Manual", value=19.168446, format="%.6f")
+        lon_final = st.sidebar.number_input("Longitud Manual", value=-104.662370, format="%.6f")
+        acc_final = 0.0
+
+    # --- PROCESAMIENTO ---
+    DATA_FILE = "field_app_data.parquet"
     try:
         df, spatial_tree = load_engine(DATA_FILE)
-    except Exception as e:
-        st.error(f"DATABASE ERROR: {e}")
+    except:
+        st.error("DATABASE NOT FOUND")
         return
 
-    if st.button("EJECUTAR ESCANEO DE CAMPO"):
-        with st.spinner("SINCRONIZANDO TELEMETRÍA..."):
-            # Búsqueda KD-Tree
-            dist, idx = spatial_tree.query([lat_gps, lon_gps])
-            data = df.iloc[idx]
-            
-            # --- PANEL DE COORDENADAS (NUEVO) ---
-            st.subheader("📍 Posicionamiento Espacial")
-            col_gps, col_data = st.columns(2)
-            
-            with col_gps:
-                st.markdown(f"""
-                <div class="telemetry-box">
-                    <b>GPS (TU UBICACIÓN):</b><br>
-                    LAT: {lat_gps:.6f}<br>
-                    LON: {lon_gps:.6f}<br>
-                    PRECISIÓN: ±{acc_gps:.1f}m
-                </div>
-                """, unsafe_allow_html=True)
-                
-            with col_data:
-                st.markdown(f"""
-                <div class="telemetry-box">
-                    <b>NODO (BASE DE DATOS):</b><br>
-                    LAT: {data['lat_suelo']:.6f}<br>
-                    LON: {data['lon_suelo']:.6f}<br>
-                    OFFSET: {dist*111111:.1f}m
-                </div>
-                """, unsafe_allow_html=True)
+    if st.button("ESCANEAR POSICIÓN ACTUAL"):
+        dist, idx = spatial_tree.query([lat_final, lon_final])
+        data = df.iloc[idx]
+        
+        # Panel de Coordenadas
+        st.subheader("📍 Telemetría")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f'<div class="telemetry-box"><b>GPS ACTUAL</b><br>LAT: {lat_final:.6f}<br>LON: {lon_final:.6f}</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown(f'<div class="telemetry-box"><b>NODO DATA</b><br>LAT: {data["lat_suelo"]:.6f}<br>LON: {data["lon_suelo"]:.6f}</div>', unsafe_allow_html=True)
 
-            # --- SECCIÓN SUELO ---
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("🛠️ Caracterización de Suelo")
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("pH", f"{data['suelo_ph']:.1f}")
-            c2.metric("SOC", f"{data['suelo_soc']:.1f}")
-            c3.metric("ARCILLA", f"{data['suelo_arcilla_pct']:.1f}%")
-            c4.metric("TWI", f"{data['topo_twi']:.1f}")
-            
-            # --- SECCIÓN CLIMA ---
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader(f"📊 Análisis Climático: {nombre_mes}")
-            
-            metrics = [
-                ("LLUVIA TOTAL", "rain_25", "rain_26", "mm", False),
-                ("ESTRÉS (VPD)", "vpd_25", "vpd_26", "kPa", True),
-                ("TEMP. MÁX", "temp_25", "temp_26", "°C", True),
-                ("VIGOR (NDVI)", "vigor_25", "vigor_26", "idx", False)
-            ]
+        # Resultados de Suelo
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.subheader("🛠️ Caracterización de Suelo")
+        cols = st.columns(4)
+        cols[0].metric("pH", f"{data['suelo_ph']:.1f}")
+        cols[1].metric("SOC", f"{data['suelo_soc']:.1f}")
+        cols[2].metric("ARCILLA", f"{data['suelo_arcilla_pct']:.1f}%")
+        cols[3].metric("TWI", f"{data['topo_twi']:.1f}")
 
-            for label, col_25, col_26, unit, inv in metrics:
-                val_25, val_26 = data[col_25], data[col_26]
-                st.metric(
-                    label=f"{label} (vs {nombre_mes} '25)", 
-                    value=f"{val_26:.2f} {unit}", 
-                    delta=f"{val_26-val_25:.2f} {unit}",
-                    delta_color="inverse" if inv else "normal"
-                )
-                st.markdown("---")
+        # Comparativa Climática
+        st.subheader(f"📊 Clima: {nombre_mes}")
+        m_list = [("Lluvia", "rain_25", "rain_26", "mm", False),
+                  ("VPD", "vpd_25", "vpd_26", "kPa", True),
+                  ("Temp", "temp_25", "temp_26", "°C", True),
+                  ("NDVI", "vigor_25", "vigor_26", "idx", False)]
 
-    st.sidebar.markdown(f"### TELEMETRÍA")
-    st.sidebar.code(f"LAT: {lat_gps:.4f}\nLON: {lon_gps:.4f}\nMONTH: {nombre_mes}")
-    st.sidebar.info("MODO: ESCANEO ACTIVO")
+        for label, c25, c26, unit, inv in m_list:
+            v25, v26 = data[c25], data[c26]
+            st.metric(label=f"{label} ('26 vs '25)", value=f"{v26:.2f} {unit}", 
+                      delta=f"{v26-v25:.2f}", delta_color="inverse" if inv else "normal")
+            st.markdown("---")
 
 if __name__ == "__main__":
     main()
