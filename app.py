@@ -4,6 +4,7 @@ import numpy as np
 from scipy.spatial import KDTree
 from streamlit_js_eval import get_geolocation
 import datetime
+import base64  # Necesario para procesar la imagen local
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="AGRO-SCAN NAVIGATOR", layout="wide")
@@ -11,23 +12,33 @@ st.set_page_config(page_title="AGRO-SCAN NAVIGATOR", layout="wide")
 if "location" not in st.session_state:
     st.session_state.location = None
 
-# 2. ESTILO CSS HUD MAIZAL (DISEÑO SOLICITADO)
-def apply_maiz_hud_style():
-    corn_bg = "https://upload.wikimedia.org/wikipedia/commons/3/32/Corn_field_in_Slovenia.jpg"
-    
+# --- FUNCIÓN SENIOR PARA CARGAR IMAGEN LOCAL COMO FONDO ---
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def apply_maiz_hud_style(img_file):
+    try:
+        # Intentamos cargar la imagen local
+        bin_str = get_base64_of_bin_file(img_file)
+        bg_img_style = f'background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url("data:image/jpg;base64,{bin_str}");'
+    except FileNotFoundError:
+        # Si no se encuentra el archivo, usamos un color sólido de respaldo
+        bg_img_style = 'background: #050505;'
+
     st.markdown(f"""
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=JetBrains+Mono&display=swap');
         
         .stApp {{
-            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url("{corn_bg}");
+            {bg_img_style}
             background-size: cover;
             background-attachment: fixed;
             color: #FFFFFF;
             font-family: 'Inter', sans-serif;
         }}
         
-        /* Paneles Estilo Glassmorphism */
         .hud-panel {{
             background: rgba(15, 15, 15, 0.85);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -38,7 +49,6 @@ def apply_maiz_hud_style():
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
         }}
         
-        /* Dial Central Aeroespacial */
         .dial-container {{
             display: flex; justify-content: center; align-items: center; padding: 10px 0;
         }}
@@ -54,7 +64,6 @@ def apply_maiz_hud_style():
         .dial-header {{ color: #888; font-size: 0.75rem; letter-spacing: 2px; text-transform: uppercase; }}
         .dial-value {{ color: #FFF; font-size: 1.1rem; font-weight: 700; font-family: 'JetBrains Mono', monospace; }}
 
-        /* Botones HUD */
         .stButton>button {{
             background: linear-gradient(90deg, #FF5F1F 0%, #E64A19 100%) !important;
             color: white !important;
@@ -80,7 +89,7 @@ def apply_maiz_hud_style():
         </style>
     """, unsafe_allow_html=True)
 
-# Lógica de DMS
+# --- LÓGICA DE DMS ---
 def decimal_to_dms(deg, is_lat=True):
     direction = ("N" if deg >= 0 else "S") if is_lat else ("E" if deg >= 0 else "W")
     deg = abs(deg)
@@ -96,14 +105,14 @@ def load_spatial_engine(file_path):
     return df, tree
 
 def main():
-    apply_maiz_hud_style()
+    # CAMBIA AQUÍ EL NOMBRE DE TU ARCHIVO DE IMAGEN
+    apply_maiz_hud_style("fondo.jpg") 
     
-    # --- HEADER ---
-    st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>MISSION NAVIGATOR</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>VISOR AGRÍCOLA V1.0</p>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; color:#888; font-size:0.85rem; margin-top:2px;'>SISTEMA DE ANÁLISIS GEORREFERENCIADO | JULIO 25/26</p>", unsafe_allow_html=True)
     st.markdown("<hr style='margin:15px auto; width:40%; opacity:0.2;'>", unsafe_allow_html=True)
     
-    # --- LÓGICA FUNCIONAL: SINCRONIZACIÓN GPS ---
+    # Sincronización GPS
     if st.button("🔄 SINCRONIZAR SENSOR SATELITAL"):
         st.session_state.location = None
         st.rerun()
@@ -114,21 +123,20 @@ def main():
             st.session_state.location = {
                 "lat": loc['coords']['latitude'],
                 "lon": loc['coords']['longitude'],
-                "alt": loc['coords'].get('altitude', 0),
+                "alt": loc['coords'].get('altitude', 1693.0),
                 "acc": loc['coords'].get('accuracy', 0.98)
             }
             st.rerun()
         else:
-            st.warning("⚠️ BUSCANDO SEÑAL GPS... Asegúrate de otorgar permisos en el navegador.")
-            with st.expander("⌨️ Ingreso Manual de Emergencia"):
+            st.warning("⚠️ BUSCANDO SEÑAL GPS...")
+            with st.expander("⌨️ Ingreso Manual"):
                 c1, c2 = st.columns(2)
                 m_lat = c1.number_input("Latitud", value=20.6825, format="%.6f")
                 m_lon = c2.number_input("Longitud", value=-103.3830, format="%.6f")
-                if st.button("FIJAR COORDENADAS MANUALES"):
+                if st.button("FIJAR MANUALMENTE"):
                     st.session_state.location = {"lat": m_lat, "lon": m_lon, "alt": 1693.0, "acc": 0.0}
                     st.rerun()
 
-    # --- DESPLIEGUE HUD (3 COLUMNAS) ---
     if st.session_state.location:
         lat_now = st.session_state.location['lat']
         lon_now = st.session_state.location['lon']
@@ -178,7 +186,6 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
 
-        # --- MOTOR DE BÚSQUEDA ---
         DATA_FILE = "field_app_data.parquet"
         try:
             df, tree = load_spatial_engine(DATA_FILE)
@@ -187,11 +194,10 @@ def main():
             return
 
         if st.button("🛰️ EJECUTAR ESCANEO DE CAMPO"):
-            with st.spinner("ANALIZANDO MALLA GEOGRÁFICA..."):
+            with st.spinner("ANALIZANDO..."):
                 dist, idx = tree.query(np.array([lat_now, lon_now]))
                 data = df.iloc[idx]
                 
-                # --- RESULTADOS ---
                 r_col1, r_col2 = st.columns(2)
                 
                 with r_col1:
