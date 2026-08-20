@@ -13,7 +13,7 @@ if "location" not in st.session_state:
 
 # 2. ESTILO CSS HUD MAIZAL (DISEÑO SOLICITADO)
 def apply_maiz_hud_style():
-    corn_bg = "https://images.unsplash.com/photo-1554460300-9142998a48c7?ixlib=rb-1.2.1&auto=format&fit=crop&w=1920&q=80"
+    corn_bg = "https://upload.wikimedia.org/wikipedia/commons/3/32/Corn_field_in_Slovenia.jpg"
     
     st.markdown(f"""
         <style>
