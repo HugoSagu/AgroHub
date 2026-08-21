@@ -104,7 +104,7 @@ def load_spatial_engine(file_path):
     return df, tree
 
 def main():
-    apply_maiz_hud_style("fondo_maiz.jpg") 
+    apply_maiz_hud_style("fondo.jpg") 
     
     st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>MISSION NAVIGATOR</p>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; color:#888; font-size:0.85rem; margin-top:2px;'>SISTEMA DE ANÁLISIS GEORREFERENCIADO | JULIO 25/26</p>", unsafe_allow_html=True)
