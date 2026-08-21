@@ -238,7 +238,6 @@ def main():
                     c_m4.metric("Vigor NDVI", f"{data['vigor_26']:.2f}", f"{data['vigor_26']-data['vigor_25']:.2f}")
                     st.markdown('</div>', unsafe_allow_html=True)
 
-                # --- SECCIÓN DEL MINI MAPA TÁCTICO HUD ---
 # --- SECCIÓN DEL MINI MAPA TÁCTICO HUD ---
                 st.markdown('<div class="hud-panel">', unsafe_allow_html=True)
                 st.markdown(f"""
@@ -251,15 +250,31 @@ def main():
                 if dist_km > 1.0:
                     st.caption("⚠️ **Atención:** El nodo de datos más cercano se encuentra a más de 1 km de tu posición.")
 
+                # Corrección de signo de longitud para evitar trazados transoceánicos
+                node_lat = float(data['lat_suelo'])
+                node_lon = float(data['lon_suelo'])
+                if node_lon > 0:
+                    node_lon = -node_lon
+
+                user_lat = float(lat_now)
+                user_lon = float(lon_now)
+                if user_lon > 0:
+                    user_lon = -user_lon
+
+                # Dataframe para los puntos
                 map_data = pd.DataFrame([
-                    {"name": "Tu Ubicación (GPS)", "lat": lat_now, "lon": lon_now, "color": [0, 200, 83, 255], "radius": 40},
-                    {"name": "Nodo Muestra Parquet", "lat": data['lat_suelo'], "lon": data['lon_suelo'], "color": [255, 95, 31, 255], "radius": 55}
+                    {"name": "Tu Ubicación (GPS)", "lat": user_lat, "lon": user_lon, "color": [0, 200, 83, 255], "radius": 35},
+                    {"name": "Nodo Muestra Parquet", "lat": node_lat, "lon": node_lon, "color": [255, 95, 31, 255], "radius": 50}
                 ])
 
+                # Centrar la vista exactamente en el punto medio entre ambos nodos
+                center_lat = (user_lat + node_lat) / 2
+                center_lon = (user_lon + node_lon) / 2
+
                 view_state = pdk.ViewState(
-                    latitude=lat_now, 
-                    longitude=lon_now, 
-                    zoom=14, 
+                    latitude=center_lat,
+                    longitude=center_lon,
+                    zoom=13,
                     pitch=0
                 )
 
@@ -272,7 +287,7 @@ def main():
                     pickable=True
                 )
 
-                line_data = pd.DataFrame([{"start": [lon_now, lat_now], "end": [data['lon_suelo'], data['lat_suelo']]}])
+                line_data = pd.DataFrame([{"start": [user_lon, user_lat], "end": [node_lon, node_lat]}])
 
                 layer_line = pdk.Layer(
                     "LineLayer",
@@ -283,7 +298,7 @@ def main():
                     get_width=4
                 )
 
-                # Mapa con capa base libre CartoDB Dark Matter
+                # Renderizado con mapa libre de CartoDB (Dark)
                 st.pydeck_chart(
                     pdk.Deck(
                         layers=[layer_points, layer_line],
