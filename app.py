@@ -106,7 +106,7 @@ def load_spatial_engine(file_path):
 def main():
     apply_maiz_hud_style("fondo.jpg") 
     
-    st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>MISSION NAVIGATOR</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>VISOR AGRÍCOLA</p>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; color:#888; font-size:0.85rem; margin-top:2px;'>SISTEMA DE ANÁLISIS GEORREFERENCIADO | JULIO 25/26</p>", unsafe_allow_html=True)
     st.markdown("<hr style='margin:15px auto; width:40%; opacity:0.2;'>", unsafe_allow_html=True)
     
@@ -239,6 +239,7 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)
 
                 # --- SECCIÓN DEL MINI MAPA TÁCTICO HUD ---
+# --- SECCIÓN DEL MINI MAPA TÁCTICO HUD ---
                 st.markdown('<div class="hud-panel">', unsafe_allow_html=True)
                 st.markdown(f"""
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -251,11 +252,16 @@ def main():
                     st.caption("⚠️ **Atención:** El nodo de datos más cercano se encuentra a más de 1 km de tu posición.")
 
                 map_data = pd.DataFrame([
-                    {"name": "Tu Ubicación (GPS)", "lat": lat_now, "lon": lon_now, "color": [0, 200, 83, 205], "radius": 30},
-                    {"name": "Nodo Muestra Parquet", "lat": data['lat_suelo'], "lon": data['lon_suelo'], "color": [255, 95, 31, 255], "radius": 45}
+                    {"name": "Tu Ubicación (GPS)", "lat": lat_now, "lon": lon_now, "color": [0, 200, 83, 255], "radius": 40},
+                    {"name": "Nodo Muestra Parquet", "lat": data['lat_suelo'], "lon": data['lon_suelo'], "color": [255, 95, 31, 255], "radius": 55}
                 ])
 
-                view_state = pdk.ViewState(latitude=lat_now, longitude=lon_now, zoom=13, pitch=30)
+                view_state = pdk.ViewState(
+                    latitude=lat_now, 
+                    longitude=lon_now, 
+                    zoom=14, 
+                    pitch=0
+                )
 
                 layer_points = pdk.Layer(
                     "ScatterplotLayer",
@@ -273,15 +279,16 @@ def main():
                     line_data,
                     get_source_position="start",
                     get_target_position="end",
-                    get_color=[255, 95, 31, 180],
-                    get_width=3
+                    get_color=[255, 95, 31, 220],
+                    get_width=4
                 )
 
+                # Mapa con capa base libre CartoDB Dark Matter
                 st.pydeck_chart(
                     pdk.Deck(
                         layers=[layer_points, layer_line],
                         initial_view_state=view_state,
-                        map_style="mapbox://styles/mapbox/dark-v10",
+                        map_style="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
                         tooltip={"text": "{name}"}
                     ),
                     use_container_width=True
