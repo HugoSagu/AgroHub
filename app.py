@@ -4,7 +4,8 @@ import numpy as np
 from scipy.spatial import KDTree
 from streamlit_js_eval import get_geolocation
 import datetime
-import base64  # Necesario para procesar la imagen local
+import base64
+import pydeck as pdk
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="AGRO-SCAN NAVIGATOR", layout="wide")
@@ -12,7 +13,7 @@ st.set_page_config(page_title="AGRO-SCAN NAVIGATOR", layout="wide")
 if "location" not in st.session_state:
     st.session_state.location = None
 
-# --- FUNCIÓN SENIOR PARA CARGAR IMAGEN LOCAL COMO FONDO ---
+# --- FUNCIÓN PARA CARGAR IMAGEN LOCAL COMO FONDO ---
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, 'rb') as f:
         data = f.read()
@@ -20,11 +21,9 @@ def get_base64_of_bin_file(bin_file):
 
 def apply_maiz_hud_style(img_file):
     try:
-        # Intentamos cargar la imagen local
         bin_str = get_base64_of_bin_file(img_file)
         bg_img_style = f'background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.7)), url("data:image/jpg;base64,{bin_str}");'
     except FileNotFoundError:
-        # Si no se encuentra el archivo, usamos un color sólido de respaldo
         bg_img_style = 'background: #050505;'
 
     st.markdown(f"""
@@ -105,10 +104,9 @@ def load_spatial_engine(file_path):
     return df, tree
 
 def main():
-    # CAMBIA AQUÍ EL NOMBRE DE TU ARCHIVO DE IMAGEN
-    apply_maiz_hud_style("fondo.jpg") 
+    apply_maiz_hud_style("fondo_maiz.jpg") 
     
-    st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>VISOR AGRÍCOLA V1.0</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align:center; color:#FF5F1F; letter-spacing:5px; margin-bottom:0; font-weight:bold; font-size:1.5rem;'>MISSION NAVIGATOR</p>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center; color:#888; font-size:0.85rem; margin-top:2px;'>SISTEMA DE ANÁLISIS GEORREFERENCIADO | JULIO 25/26</p>", unsafe_allow_html=True)
     st.markdown("<hr style='margin:15px auto; width:40%; opacity:0.2;'>", unsafe_allow_html=True)
     
@@ -195,8 +193,9 @@ def main():
 
         if st.button("🛰️ EJECUTAR ESCANEO DE CAMPO"):
             with st.spinner("ANALIZANDO..."):
-                dist, idx = tree.query(np.array([lat_now, lon_now]))
+                dist_deg, idx = tree.query(np.array([lat_now, lon_now]))
                 data = df.iloc[idx]
+                dist_km = dist_deg * 111.1
                 
                 r_col1, r_col2 = st.columns(2)
                 
@@ -217,14 +216,77 @@ def main():
                     
                     c_m1, c_m2 = st.columns(2)
                     c_m1.metric("Lluvia", f"{data['rain_26']:.1f} mm", f"{data['rain_26']-data['rain_25']:.1f} vs '25")
-                    c_m2.metric("Estrés VPD", f"{data['vpd_26']:.2f} kPa", f"{data['vpd_26']-data['vpd_25']:.2f}", delta_color="inverse")
+                    
+                    # Cálculo de Rango VPD
+                    vpd_val = data['vpd_26']
+                    if 0.8 <= vpd_val <= 1.2:
+                        vpd_status = "ÓPTIMO"
+                    elif vpd_val < 0.8:
+                        vpd_status = "BAJO"
+                    else:
+                        vpd_status = "ALTO"
+
+                    c_m2.metric(
+                        label="Estrés VPD (Rango 0.8-1.2)", 
+                        value=f"{vpd_val:.2f} kPa", 
+                        delta=f"{vpd_val-data['vpd_25']:.2f} ({vpd_status})", 
+                        delta_color="inverse"
+                    )
                     
                     c_m3, c_m4 = st.columns(2)
                     c_m3.metric("Temp Máx", f"{data['temp_26']:.1f} °C", f"{data['temp_26']-data['temp_25']:.1f}", delta_color="inverse")
                     c_m4.metric("Vigor NDVI", f"{data['vigor_26']:.2f}", f"{data['vigor_26']-data['vigor_25']:.2f}")
                     st.markdown('</div>', unsafe_allow_html=True)
 
-                st.caption(f"Distancia al nodo: {dist*111.1:.2f} km")
+                # --- SECCIÓN DEL MINI MAPA TÁCTICO HUD ---
+                st.markdown('<div class="hud-panel">', unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="color:#FF5F1F; font-weight:bold; letter-spacing:1px;">🗺️ VERIFICACIÓN ESPACIAL DE NODO</span>
+                        <span style="color:#AAA; font-size:0.8rem; font-family:monospace;">DISTANCIA: {dist_km:.2f} KM</span>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if dist_km > 1.0:
+                    st.caption("⚠️ **Atención:** El nodo de datos más cercano se encuentra a más de 1 km de tu posición.")
+
+                map_data = pd.DataFrame([
+                    {"name": "Tu Ubicación (GPS)", "lat": lat_now, "lon": lon_now, "color": [0, 200, 83, 205], "radius": 30},
+                    {"name": "Nodo Muestra Parquet", "lat": data['lat_suelo'], "lon": data['lon_suelo'], "color": [255, 95, 31, 255], "radius": 45}
+                ])
+
+                view_state = pdk.ViewState(latitude=lat_now, longitude=lon_now, zoom=13, pitch=30)
+
+                layer_points = pdk.Layer(
+                    "ScatterplotLayer",
+                    map_data,
+                    get_position=["lon", "lat"],
+                    get_color="color",
+                    get_radius="radius",
+                    pickable=True
+                )
+
+                line_data = pd.DataFrame([{"start": [lon_now, lat_now], "end": [data['lon_suelo'], data['lat_suelo']]}])
+
+                layer_line = pdk.Layer(
+                    "LineLayer",
+                    line_data,
+                    get_source_position="start",
+                    get_target_position="end",
+                    get_color=[255, 95, 31, 180],
+                    get_width=3
+                )
+
+                st.pydeck_chart(
+                    pdk.Deck(
+                        layers=[layer_points, layer_line],
+                        initial_view_state=view_state,
+                        map_style="mapbox://styles/mapbox/dark-v10",
+                        tooltip={"text": "{name}"}
+                    ),
+                    use_container_width=True
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
